@@ -1,0 +1,21 @@
+# 构建输出
+bin/
+obj/
+dist/
+
+# 运行期文件（每台机器自己生成，不进仓库）
+settings.ini
+snippets-cs.db
+recent.json
+autostart.txt
+firstrun.txt
+*.log
+popup-preview.png
+snippet-preview.png
+moddump.txt
+
+# 本地工具目录
+.workbuddy/
+.vs/
+*.user
+*.suo

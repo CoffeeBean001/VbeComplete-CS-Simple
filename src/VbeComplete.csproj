@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>VbeComplete</AssemblyName>
+    <RootNamespace>VbeComplete</RootNamespace>
+    <ApplicationManifest>Resources\app.manifest</ApplicationManifest>
+    <!-- 图标：exe 本体的图标（资源管理器/任务栏）+ 内嵌一份给托盘和窗口用。
+         两处都要：ApplicationIcon 是编译进 PE 的 Win32 资源，运行时用 Icon 类
+           读不到；EmbeddedResource 才能在代码里 new Icon(stream, size) 挑尺寸。 -->
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- 中文注释必须按 UTF-8 读，否则源文件里的字面量会乱码 -->
+    <CodePage>65001</CodePage>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <DebugType>none</DebugType>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <!-- 只依赖机器上已装的 .NET 运行时，发布时再打成一个 exe（见 build.bat） -->
+    <SelfContained>false</SelfContained>
+    <!-- DPI 感知在 app.manifest 里声明（PerMonitorV2）。程序没有调用
+         ApplicationConfiguration.Initialize()，换成 SDK 属性会让声明失效。 -->
+    <NoWarn>$(NoWarn);WFO0003</NoWarn>
+  </PropertyGroup>
+
+  <!-- app.ico 既是 exe 图标，也要在运行时读得到（托盘 / 窗口）。
+       LogicalName 固定，代码里按 VbeComplete.app.ico 这个名字取。 -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\app.ico">
+      <LogicalName>VbeComplete.app.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+</Project>

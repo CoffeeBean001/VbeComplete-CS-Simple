@@ -1,0 +1,13 @@
+* text=auto
+
+# 批处理必须是 CRLF，否则 cmd 会把某些行拆错
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+*.cs    text eol=crlf
+*.ini   text eol=crlf
+*.md    text eol=lf
+*.py    text eol=lf
+
+*.ico   binary
+*.db    binary
