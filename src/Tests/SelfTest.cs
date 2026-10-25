@@ -117,6 +117,9 @@ namespace VbeComplete
             Eq("caret-col/第5个字符之前", Rules.CaretColForCharCol("    n = 1", 5), 5);
             Eq("caret-col/行尾之后", Rules.CaretColForCharCol("    Dim abcd", 13), 13);
             Eq("caret-col/全角行", Rules.CaretColForCharCol("    学生 = 1", 7), 9);
+            // 回车缩进后落光标用的是同一个函数：Tab 缩进必须是 9（两格 Tab = 8 列），
+            //   按字符数算会得到 3，光标落进缩进中间。
+            Eq("caret-col/Tab 缩进之后", Rules.CaretColForCharCol("\t\t", 3), 9);
 
             // VBE 给的是显示列。纯 ASCII 行两种语义数值相同（所以这个坑
             //   只在有中文/全角的行上暴露）；全角行必须换算，否则取词会落空。

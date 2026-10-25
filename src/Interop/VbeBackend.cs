@@ -823,7 +823,10 @@ namespace VbeComplete
                 // 会再补一个回车，用户按一下就多出一行）。所以 SetCaret 必须单独
                 // try：它的 COM 调用是会抛的（行号越界 / 模块被关掉 / RPC 断了），
                 // 让它冒到下面那个 catch 里去就等于"吞了回车又补了一行"。
-                try { SetCaret(anchor + 1, indent.Length + 1); }
+                // 列要按**显示列**算：SetCaret 吃的是 VBE 的显示列，一个 Tab 占
+                //   好几个格。用 indent.Length（字符数）在 Tab 工程里会把光标落进
+                //   缩进中间 —— 第一个字符就打在错的位置上。空格缩进两者相等。
+                try { SetCaret(anchor + 1, Rules.CaretColForCharCol(indent, indent.Length + 1)); }
                 catch (Exception e) { Log.Write("回车缩进：已插行、落光标失败（按成功返回）：{0}", e.Message); }
                 return true;
             }
