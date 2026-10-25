@@ -1371,10 +1371,42 @@ End Sub
                 Editing.BranchAlign("#Else", new List<string> { "#If VBA7 Then" }, "    ",
                     out mine, out next) && mine == "" && next == "    ");
 
+            // 嵌套深一点的真实形状：上面还压着 For / If / Next / End If，
+            //   往上找归属者时不能被它们带偏。
+            var nested = new List<string>
+            {
+                "Private Function getArray(ws, col)",
+                "    For i = 2 To 3",
+                "        If ws.Cells(i, col) <> \"\" Then",
+                "            ReDim Preserve arr(0 To 1)",
+                "        End If",
+                "    Next",
+                "    If n = 0 Then",
+                "        getArray = \"\"",
+            };
+            Ok("branch/嵌套里 Else 回到它那层 If",
+                Editing.BranchAlign("        Else", nested, "    ", out mine, out next) &&
+                mine == "    " && next == "        ");
+
+            // ---- 回车接管的宽松判据（快照落后时也接管）----
+            //   这一层是"要不要先接管"，真正的结论由 NewLineBelow 拿真 COM 重判。
+            //   分支行必须在表里，否则 `Else` 在快照落后时永远轮不到对齐。
+            Ok("enter-prefix/块头半截", Editing.LooksLikeBlockHeaderPrefix("    For i = 1 To "));
+            Ok("enter-prefix/Else", Editing.LooksLikeBlockHeaderPrefix("        Else"));
+            Ok("enter-prefix/Else 半截", Editing.LooksLikeBlockHeaderPrefix("        Els"));
+            Ok("enter-prefix/ElseIf 半截", Editing.LooksLikeBlockHeaderPrefix("        ElseIf x The"));
+            Ok("enter-prefix/Case", Editing.LooksLikeBlockHeaderPrefix("        Case 1"));
+            Ok("enter-prefix/普通行不算", !Editing.LooksLikeBlockHeaderPrefix("        x = 1"));
+            Ok("enter-prefix/elsewhere 不算", !Editing.LooksLikeBlockHeaderPrefix("        elsewhere = 1"));
+
             // ---- 回车接管 ----
             string blockLine = "    For i = 1 To 3";
             Ok("enter/块头行尾接管",
                 Editing.EnterIndentWanted(blockLine, Rules.DispCol(blockLine, blockLine.Length)));
+            // 分支行同样是接管对象：回车那一下要把本行拉回 If 那层
+            string elseLine = "        Else";
+            Ok("enter/分支行行尾接管",
+                Editing.EnterIndentWanted(elseLine, Rules.DispCol(elseLine, elseLine.Length)));
             Ok("enter/普通行不接管",
                 !Editing.EnterIndentWanted("    x = 1", Rules.DispCol("    x = 1", 9)));
             string comment = "    ' 注释";

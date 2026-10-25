@@ -502,7 +502,7 @@ namespace VbeComplete
         // ------------------------------------------------------------------
 
         /// <summary>
-        /// 这一行"看起来像块头 / 整行注释"——**允许只写了半截**。
+        /// 这一行"看起来像块头 / 分支行 / 整行注释"——**允许只写了半截**。
         ///
         /// 为什么要这个：钩子线程只能拿轮询留下的快照，而用户经常是
         ///   `For i = 1 To 3` 敲完最后一个字符**立刻**回车 —— 那一瞬间快照还停在
@@ -515,6 +515,11 @@ namespace VbeComplete
         ///   它只用于"要不要先接管这一下回车"；真正的决定交给 UI 线程 ——
         ///   `NewLineBelow` 会拿**真 COM 数据**再判一次，判不过就把回车原样还回去
         ///   （绝不"吞了却什么都没发生"）。误判的代价只是那一下回车晚十几毫秒。
+        ///
+        ///   分支行（`Else` / `ElseIf … Then` / `Case`）同样必须在表里：它们不补
+        ///   收尾，但回车时要把**本行**拉回该在的层级（见 BranchAlign）。少了这几个
+        ///   词，快照一落后就整条路都走不通 —— 表现是"`If` 敲完回车能补 `End If`，
+        ///   而 `Else` 敲完回车永远原样缩在块里"。
         /// </summary>
         public static bool LooksLikeBlockHeaderPrefix(string line)
         {
@@ -532,10 +537,21 @@ namespace VbeComplete
                 case "if": case "for": case "do": case "while": case "with":
                 case "select": case "sub": case "function": case "property":
                 case "type": case "enum":
+                case "else": case "elseif": case "case":
                     return true;
             }
+            // 只写了半截的分支词（`Els` 还差最后一个 e）：快照落后时就是这种样子，
+            //   照 ex 收下 —— 真伪由 NewLineBelow 拿真 COM 再判，判不过原样还回回车。
+            if (i == words.Length - 1 &&
+                (PrefixOf(first, "else") || PrefixOf(first, "elseif") || PrefixOf(first, "case")))
+                return true;
             return false;
         }
+
+        /// <summary><paramref name="s"/> 是不是 <paramref name="full"/> 的前缀（非空）。</summary>
+        private static bool PrefixOf(string s, string full) =>
+            s.Length > 0 && s.Length <= full.Length &&
+            full.StartsWith(s, StringComparison.Ordinal);
 
         /// <summary>
         /// 这一下回车值不值得由我们接管。只有两种情形：整行注释、块结构开头；
