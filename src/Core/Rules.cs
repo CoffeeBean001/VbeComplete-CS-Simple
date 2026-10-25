@@ -150,28 +150,34 @@ namespace VbeComplete
         /// <summary>
         /// 声明语句的"头"：带 Dim 的常规声明，以及**不带 Dim 的裸声明**。
         ///
-        /// 补上裸声明这一支：`Public gCount` / `Private m_arr` / `Global g`
-        ///   是模块级变量的常见写法，旧正则只认 `Public Sub` 这种"修饰符 + 关键字"，
-        ///   于是 `Public g|` 被判成普通表达式 —— 弹窗照弹，而候选池里刚好有
-        ///   它自己（解析时把 `Public g` 当成了已声明的名字），用户看到的就是
-        ///   "定义全局变量时提示它自己"。
+        /// 两种写法都要算进来：
+        ///   * `Dim x As Long` / `Const PI = 3` 这类带关键字的常规声明；
+        ///   * `Public gCount` / `Private m_arr` / `Global g` 这类裸声明 ——
+        ///     不认它的话 `Public g|` 会被当成普通表达式，而候选池里刚好有它
+        ///     自己（解析时 `Public g` 就是一条已声明的名字），弹出来就是
+        ///     "定义全局变量时提示它自己"。
+        ///
+        /// `ReDim` **不在**这张表里：它不是"造新名字"的位置。绝大多数 `ReDim`
+        ///   都在改一个已经声明过的数组（`Dim arr()` 之后 `ReDim Preserve arr(n)`），
+        ///   那里正是最需要提示原名的地方；把它按声明处理，整行就一个候选都不出，
+        ///   敲到 `ReDim Preserve ar` 也没有 `arr`。
         /// </summary>
         private static readonly Regex ReDeclHead = new Regex(
             @"^[ \t]*(?:" +
             @"(?:(?:Public|Private|Friend|Global|Static)[ \t]+)*" +
-            @"(?:Dim|Const|ReDim|WithEvents|Sub|Function|Property|Declare|Event|Enum|Type)\b" +
+            @"(?:Dim|Const|WithEvents|Sub|Function|Property|Declare|Event|Enum|Type)\b" +
             @"|(?:Public|Private|Friend|Global|Static)[ \t]+" +
-            @"(?!(?:Sub|Function|Property|Declare|Event|Enum|Type|Const|Dim|ReDim|WithEvents)\b)" +
+            @"(?!(?:Sub|Function|Property|Declare|Event|Enum|Type|Const|Dim|WithEvents)\b)" +
             @")",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>
         /// 光标是不是停在"造一个新名字 / 写一个类型"的位置 —— 这类位置一律不弹候选。
         ///
-        /// 起语义变了（口径）：
         ///   * `As` 后面【不弹】。那里只可能是类型名，VBE 自己的处理更准，
         ///     我们弹一层上去只会挡住它、打断打字节奏。
         ///   * 裸声明的名字位置【不弹】（见 ReDeclHead 的说明）。
+        ///   * `ReDim` 之后【照弹】—— 那里在改一个已经存在的数组。
         ///   例外：`Const PI = 3.14` 的等号右边是**表达式**，那里要照常提示。
         /// </summary>
         public static bool InDeclarationPosition(string line, int caretCol)

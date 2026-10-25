@@ -46,6 +46,7 @@ namespace VbeComplete
                 TestEngine();
                 TestPoolContents();
                 TestSingleCharName();
+                TestRedimArray();
                 TestFuzzy();
                 TestScope();
                 TestChineseAndExplicit();
@@ -186,6 +187,10 @@ namespace VbeComplete
             Ok("decl-position/裸 Global", Rules.InDeclarationPosition("Global g", 8));
             Ok("decl-position/裸 Public As", Rules.InDeclarationPosition("Public g As Long", 16));
             Ok("decl-position/Public Sub 不算裸声明误判", Rules.InDeclarationPosition("Public Sub DoIt(", 16));
+            // `ReDim` 不是声明位置：它在改一个已经存在的数组，那里要照常提示原名
+            Ok("decl-position/ReDim 照弹", !Rules.InDeclarationPosition("    ReDim Preserve ar", 23));
+            Ok("decl-position/ReDim 小写照弹", !Rules.InDeclarationPosition("    redim preserve ar", 23));
+            Ok("decl-position/ReDim 空括号照弹", !Rules.InDeclarationPosition("    ReDim arr(", 15));
 
             // `As` / `New` 之后一律不弹 —— 与 decl-position 互补：
             //   那条认"声明语句的行首"，这条认 `Set c = New |` / `For i As |` /
@@ -516,6 +521,37 @@ End Type
             Ok("single-char/两个字符打全了照旧收",
                 two.Count == 0,
                 "shown=" + shown2 + " items=[" + string.Join(",", two.Select(x => x.Name)) + "]");
+        }
+
+        // ------------------------------------------------------------------
+        // `ReDim` 的目标要照常提示
+        //   `Dim arr()` 之后写 `ReDim Preserve ar|`，这里在改一个已经存在的数组，
+        //   光标前那个词就是它的缩写 —— 必须把 arr 提示出来。曾经把 ReDim 当成
+        //   声明语句的行首，于是这一整行一个候选都不出。
+        // ------------------------------------------------------------------
+        private static void TestRedimArray()
+        {
+            const string code =
+                "Option Explicit\r\n" +
+                "Private Function getArray(ws, col)\r\n" +
+                "    Dim arr()\r\n" +
+                "    redim preserve ar\r\n" +
+                "End Function\r\n";
+
+            var be = new FakeBackend
+            {
+                Text = code,
+                Snap = new Snapshot { Line = 4, Text = "    redim preserve ar", Module = "Mod2", CaretCol = 23 },
+            };
+            var eng = new Engine { Recent = new Recent(), Backend = be };
+            bool shown = eng.Trigger(false, be.Snapshot());
+            var items = shown ? eng.Items.ToList() : new List<Candidate>();
+            string dump = "shown=" + shown + " items=[" + string.Join(",", items.Select(x => x.Name)) + "]";
+
+            Ok("redim/给数组名提示 arr", items.Any(x => x.Name == "arr"), dump);
+            Ok("redim/只提示 arr 不提示关键字",
+                items.All(x => x.Name != "ReDim" && x.Name != "Preserve"),
+                dump);
         }
 
         // ------------------------------------------------------------------
