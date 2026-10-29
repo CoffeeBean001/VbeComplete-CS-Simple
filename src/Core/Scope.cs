@@ -532,8 +532,9 @@ namespace VbeComplete
             // 和一个“前导词”黑名单（as/new/lib/alias/…）。
             //
             // 少了这三道闸，Worksheet 里 `Range("d2")` 和实参 `xlUp` 都会变成
-            // “变量候选”。保留一条例外：只要这个名字在**本模块里**被赋过值
-            // （`range = 1` 这种怪用法），照样按变量收。
+            // “变量候选”。保留一条例外：只要这个名字在**本模块里**被**直接**赋过值
+            // （`range = 1` 这种怪用法），照样按变量收。带下标的写法
+            // （`Cells(p, "a") = 1`）不算，见下面 IsIndexedAssign 那段。
             var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             foreach (var raw in lines)
             {
@@ -544,7 +545,17 @@ namespace VbeComplete
                 if (!mw.Success) mw = ReImpAssign.Match(cw);
                 if (!mw.Success) continue;
                 string nw = Clean(mw.Groups[1].Value);
-                if (nw.Length > 0) written.Add(nw);
+                if (nw.Length == 0) continue;
+                // **带下标的赋值不算"给这个名字赋过值"**。
+                //   这条集合唯一的用途是给宿主对象名开一扇小门（`range = 1` 这种
+                //   怪用法照样当变量收）。`Cells(p, "a") = p - 2` / `Range("A1:A2") = 1`
+                //   是**写单元格**，不是"把 Cells 当变量赋值"；把带括号的写法也记进来，
+                //   那扇小门就被撑成了大门 —— 用户打一个 `c`，第一条候选是 Excel 的
+                //   `Cells`（用户报的"我没用过 cells 当变量，却提示 cells"）。
+                //   真正"只写下标、从不写 arr = ..."的数组变量不受影响：它们走
+                //   IsArrayLikeUse / usedAsValue 那条路，不靠这扇门。
+                if (IsIndexedAssign(cw, mw)) continue;
+                written.Add(nw);
             }
 
             bool inFreeTypeBlock = false;              // Type 块里的成员不能当裸名（只能 p.X 访问）
@@ -617,8 +628,9 @@ namespace VbeComplete
                     if (IsAfterNumber(code, m)) continue;
                     // 宿主全局对象（Range / Cells / ActiveSheet…）与宿主枚举
                     //   常量（vbYes / xlUp / msoTrue…）不是用户变量。除非本模块里
-                    //   给这个名字赋过值（`range = 1`），否则不收 —— 这就是两道闸：
-                    //   宿主对象名 + 宿主枚举常量。
+                    //   给这个名字**直接**赋过值（`range = 1`），否则不收 —— 这就是两道闸：
+                    //   宿主对象名 + 宿主枚举常量。`written` 只记无下标的赋值，
+                    //   于是 `Cells(1, "a") = 1` 这种写单元格的语句挡不住闸门。
                     if (!written.Contains(w) && (IsHostObjectName(w) || IsHostEnumConst(w)))
                         continue;
                     // **按作用域**判"声明过没有"。
@@ -700,6 +712,20 @@ namespace VbeComplete
             int len = e - p;
             if (len != word.Length) return false;
             return code.Substring(p + 1, len).Equals(word, StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// 这条赋值语句是不是**带下标**的写法：`Cells(p, "a") = 1` / `Range("A1") = 2`。
+        ///
+        /// <para>判据只看语法：名字之后（跳过空白）紧跟 `(`。带下标的赋值写的是
+        /// "这个对象的第几个元素"，不是"把这个名字当变量赋值" —— 所以它不该让
+        /// 宿主对象名（Cells / Range / ActiveSheet…）绕过那道闸门进候选池。</para>
+        /// </summary>
+        private static bool IsIndexedAssign(string code, Match m)
+        {
+            int i = m.Groups[1].Index + m.Groups[1].Length;
+            while (i < code.Length && (code[i] == ' ' || code[i] == '\t')) i++;
+            return i < code.Length && code[i] == '(';
         }
 
         /// <summary>

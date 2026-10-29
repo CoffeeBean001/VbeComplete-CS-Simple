@@ -1105,6 +1105,34 @@ End Sub
             Ok("host/被赋过值的同名照常收", msH2.FreeIdents.Contains("range"),
                 string.Join(",", msH2.FreeIdents));
 
+            // ---- 带下标的赋值不许把宿主对象名"洗"成变量 ----
+            // 症状：模块里有 `Cells(p, "a") = p - 2`（写单元格），用户打一个 `c`
+            //   第一条候选就是 Excel 的 `Cells` —— 他根本没把 Cells 当变量用过。
+            //   原因：`名字(...) = ...` 也被记成"给这个名字赋过值"，于是上一条
+            //   那扇小门被撑成大门，宿主对象名的闸门整个失效。
+            const string hostWrite = "Sub T()\r\n" +
+                                     "    Cells(1, \"a\") = 1\r\n" +
+                                     "    Range(\"A1:B2\") = 2\r\n" +
+                                     "    For i = 3 To Cells(Cells.Rows.Count, \"b\").End(xlUp).Row\r\n" +
+                                     "        c\r\n" +
+                                     "    Next\r\n" +
+                                     "End Sub\r\n";
+            var msHW = Scope.Analyze("M", hostWrite);
+            Ok("host/带下标赋值不让 Cells / Range 进池",
+                !msHW.FreeIdents.Contains("Cells") && !msHW.FreeIdents.Contains("Range"),
+                string.Join(",", msHW.FreeIdents));
+
+            // 同一段代码在**引擎层**也不许把 Cells 当候选（用户看到的症状）
+            var beHW = new FakeBackend
+            {
+                Text = hostWrite,
+                Snap = new Snapshot { Line = 5, Text = "        c", Module = "M", CaretCol = 10 },
+            };
+            var engHW = new Engine { Recent = new Recent(), Backend = beHW };
+            var itemsHW = engHW.Trigger(false, beHW.Snap) ? engHW.Items.ToList() : new List<Candidate>();
+            Ok("host/打 c 不弹 Cells", !itemsHW.Any(c => c.Name == "Cells"),
+                string.Join(",", itemsHW.Select(c => c.Name)));
+
             // ---- 命名参数（`f(Name:=1)`）不是变量 ----
             var msNA = Scope.Analyze("M", "Sub T()\r\n    MsgBox Prompt:=x1, Buttons:=2\r\nEnd Sub\r\n");
             Ok("free/命名参数不进池（Prompt / Buttons）",
